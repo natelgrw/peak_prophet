@@ -1,0 +1,19 @@
+name: uvvismlenv
+channels:
+  - conda-forge
+  - pytorch
+  - rdkit
+  - defaults
+dependencies:
+  - python=3.8
+  - scikit-learn
+  - pandas
+  - numpy
+  - tqdm
+  - rdkit
+  - openpyxl
+  - sigopt
+  - xgboost
+  - fastapi
+  - uvicorn
+  - chemprop
