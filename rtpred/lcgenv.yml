@@ -1,0 +1,36 @@
+name: lcgenv
+channels: 
+  - defaults
+  - conda-forge
+  - pytorch
+  - rdkit
+dependencies:
+  - python=3.10
+  - pip
+  - rdkit
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - pymzml
+  - scikit-learn
+  - jupyterlab
+  - streamlit
+  - pytorch
+  - torchvision
+  - torchaudio
+  - gpytorch
+  - botorch
+  - tqdm
+  - openpyxl
+  - sigopt
+  - xgboost
+  - pip:
+    - mocca2
+    - pyteomics
+    - chemprop
+    - selenium
+    - fastapi
+    - uvicorn
+    - python-multipart
+    - pyppeteer
