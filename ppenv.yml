@@ -1,4 +1,4 @@
-name: lcgenv
+name: ppenv
 channels: 
   - defaults
   - conda-forge

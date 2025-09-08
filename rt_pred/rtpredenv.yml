@@ -1,5 +1,5 @@
-name: lcgenv
-channels: 
+name: rtpredenv
+channels:
   - defaults
   - conda-forge
   - pytorch
@@ -26,7 +26,6 @@ dependencies:
   - sigopt
   - xgboost
   - pip:
-    - mocca2
     - pyteomics
     - chemprop
     - selenium
