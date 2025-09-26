@@ -5,10 +5,40 @@ PeakProphet is an end-to-end pipeline for LC–MS peak characterization. It inte
 Current Version: **1.0.0**
 
 ## 🔮 Prediction Mechanism
-- Generates candidate products given reactants and solvent using the ASKCOS web server.
-- Predicts retention times using online RT models.
-- Predicts λ<sub>max</sub> using UV–Vis ML checkpoints.
-- Provides unified PredictedProduct and ChemicalReaction classes to organize predicted values.
+
+PeakProphet employs a comprehensive multi-modal prediction pipeline that generates candidate compounds and predicts their analytical properties:
+
+### Product Generation
+- **ASKCOS Integration**: Generates candidate products given reactants and solvent using the ASKCOS web server
+- **SMILES-based**: All products are represented as SMILES strings with associated probabilities and molecular weights
+
+### Analytical Property Prediction
+
+#### Retention Time Prediction
+- **RTPred Integration**: Uses online RT models via web scraping (rtpred.ca)
+- **CS22 Method**: Employs the CS22 chromatographic method for accurate retention time estimation
+- **Batch Processing**: Handles multiple compounds simultaneously for efficiency
+
+#### UV-Vis Absorption Prediction  
+- **ChemProp Models**: Predicts λ<sub>max</sub> using UV–Vis ML checkpoints trained on experimental data
+- **Multi-fidelity Approach**: Leverages deep learning models for accurate absorption peak prediction
+- **Solvent-aware**: Considers solvent effects on absorption spectra
+
+#### Mass Spectrometry Adduct Prediction
+- **Comprehensive Coverage**: Predicts **46 adducts** (31 positive + 15 negative) for each compound
+- **Literature-based Probabilities**: Assigns realistic relative abundances based on mass spectrometry literature
+- **Adduct Types Include**:
+  - **Common adducts**: `[M+H]+`, `[M-H]-`, `[M+Na]+`, `[M+K]+`, `[M+NH4]+`
+  - **Solvent adducts**: `[M+ACN+H]+`, `[M+CH3OH+H]+`, `[M+DMSO+H]+`
+  - **Doubly charged**: `[M+2H]2+`, `[M+H+Na]2+`, `[M+2Na]2+`
+  - **Dimer adducts**: `[2M+H]+`, `[2M+Na]+`, `[2M-H]-`
+  - **Triply charged**: `[M+3H]3+`, `[M+2H+Na]3+`
+  - **Negative adducts**: `[M+Cl]-`, `[M+Br]-`, `[M+FA-H]-`, `[M+TFA-H]-`
+
+### Data Organization
+- **PredictedProduct Class**: Unified representation with SMILES, probability, molecular weight, retention time, λ<sub>max</sub>, and MS adducts
+- **ChemicalReaction Class**: Manages reaction context and orchestrates all prediction methods
+- **Dictionary Format**: MS adducts stored as `{adduct_mass: relative_probability}` for easy integration with scoring algorithms
 
 ## 🧪 Decoding & MS Utilities
 - Process LC–UV chromatograms: baseline correction, peak finding, deconvolution.
@@ -17,12 +47,29 @@ Current Version: **1.0.0**
 - Parse mass spectrometry data (.mzML): extract TIC/BPC, pull spectra near target retention times.
 
 ## 🧮 Scoring & Assignment
-- Score candidates against observed peaks by:
-- Retention time (Gaussian kernel).
-- λ<sub>max</sub> (Gaussian kernel).
-- MS spectra similarity (cosine similarity).
-- Combine feature-level scores into a weighted aggregate.
-- Perform optimal assignment of predicted compounds to peaks.
+
+PeakProphet employs a sophisticated multi-criteria scoring system that evaluates predicted compounds against observed LC-MS peaks:
+
+### Scoring Criteria
+
+#### Retention Time Scoring
+- **Gaussian Kernel**: Evaluates RT matches using Gaussian similarity functions
+- **Tolerance-based**: Accounts for chromatographic variability and measurement uncertainty
+
+#### UV-Vis Absorption Scoring  
+- **λ<sub>max</sub> Matching**: Compares predicted vs observed absorption maxima
+- **Gaussian Kernel**: Provides probabilistic scoring for absorption peak alignment
+
+#### Mass Spectrometry Scoring
+- **Adduct Matching**: Compares predicted adduct masses against observed MS peaks
+- **Probability-weighted**: Uses literature-based adduct probabilities for scoring
+- **Multi-adduct Support**: Evaluates all 46 predicted adducts for comprehensive MS matching
+- **Cosine Similarity**: Measures spectral similarity between predicted and observed MS data
+
+### Assignment Algorithm
+- **Weighted Aggregation**: Combines RT, UV, and MS scores into unified compound-peak similarity scores
+- **Optimal Assignment**: Uses combinatorial optimization to assign predicted compounds to observed peaks
+- **Multi-modal Integration**: Leverages all analytical dimensions (RT, UV, MS) for robust peak identification
 
 ## ⚙️ Installation
 
@@ -35,6 +82,8 @@ Key Dependencies:
 - `chemprop` for UVVisML lambda max prediction model operations
 - `pymzml` for mass spectra extraction and data processing
 - `scipy` for peak assignment and scoring
+- `rdkit` for molecular weight calculation and SMILES processing
+- `pandas` and `numpy` for data manipulation and numerical computations
 
 ## 🧠 Models Used
 
@@ -82,3 +131,41 @@ Key Dependencies:
     url={http://dx.doi.org/10.1039/D1SC05677H}
   }
   ```
+
+## 🔬 Mass Spectrometry Adduct Prediction Implementation
+
+PeakProphet includes a comprehensive mass spectrometry adduct prediction system that generates realistic adduct patterns for LC-MS analysis:
+
+### Adduct Coverage
+- **46 Total Adducts**: 31 positive mode + 15 negative mode adducts
+- **Comprehensive Types**: Covers common, rare, and specialized adducts observed in LC-MS
+- **Literature-based**: Probabilities derived from mass spectrometry literature and experimental observations
+
+### Probability Assignment
+The system assigns realistic relative probabilities based on:
+- **Common adducts** (e.g., `[M+H]+`, `[M-H]-`): High probability (0.95-1.0)
+- **Medium frequency adducts** (e.g., `[M+Na]+`, `[M+K]+`): Medium probability (0.6-0.85)
+- **Solvent adducts** (e.g., `[M+ACN+H]+`): Low-medium probability (0.2-0.4)
+- **Rare adducts** (e.g., dimers, triply charged): Low probability (0.01-0.1)
+
+### Technical Implementation
+- **RDKit Integration**: Uses RDKit for molecular weight calculation from SMILES
+- **Batch Processing**: Efficiently processes multiple compounds simultaneously
+- **Dictionary Output**: Returns `{adduct_mass: relative_probability}` for easy integration
+- **Error Handling**: Gracefully handles invalid SMILES and calculation errors
+
+### Usage Example
+```python
+from rxn_classes import ChemicalReaction
+
+# Create reaction and add products
+rxn = ChemicalReaction(['CCO'], 'water')
+rxn.add_product(PredictedProduct('CCO', 0.8, 46.07))
+
+# Predict MS adducts
+rxn.predict_products_ms_adducts()
+
+# Access adduct data
+product = rxn.get_products()[0]
+ms_values = product.get_ms_values()  # Dict[float, float]
+```
