@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 import asyncio
 
 # Handle imports whether this file is imported as part of the package or run directly
@@ -6,17 +6,20 @@ try:
     from predictions.askcos_scraper import scrape_askcos
     from predictions.rt_pred.rt_pred import predict_retention_time_from_smiles
     from predictions.lmax_pred.lmax_pred import predict_lambda_max_in_conda_env
+    from predictions.ms_pred.ms_pred import predict_ms_adducts
 except Exception:  # pragma: no cover - fallback for direct execution
     from askcos_scraper import scrape_askcos
     from rt_pred.rt_pred import predict_retention_time_from_smiles
     from lmax_pred.lmax_pred import predict_lambda_max_in_conda_env
+    from ms_pred.ms_pred import predict_ms_adducts
 
 class PredictedProduct:
     """Represents a predicted product of a reaction."""
-    def __init__(self, smiles: str, probability: float, mol_weight: float, retention_time: Optional[float] = None, lambda_max: Optional[float] = None):
+    def __init__(self, smiles: str, probability: float, mol_weight: float, ms_values:  Optional[Dict[float, float]] = None, retention_time: Optional[float] = None, lambda_max: Optional[float] = None):
         self.smiles = smiles
         self.probability = probability
         self.mol_weight = mol_weight
+        self.ms_values = ms_values
         self.retention_time = retention_time
         self.lambda_max = lambda_max
 
@@ -25,6 +28,12 @@ class PredictedProduct:
     
     def get_smiles(self) -> str:
         return self.smiles
+    
+    def set_ms_values(self, ms_values: Dict[float, float]):
+        self.ms_values = ms_values
+    
+    def get_ms_values(self) -> Dict[float, float]:
+        return self.ms_values
     
     def set_probability(self, probability: float):
         self.probability = probability
@@ -51,7 +60,8 @@ class PredictedProduct:
         return self.lambda_max
 
     def __repr__(self):
-        return f"PredictedProduct(smiles='{self.smiles}', RT={self.retention_time}, λmax={self.lambda_max})"
+        ms_info = f", MS={len(self.ms_values)} adducts" if self.ms_values else ", MS=None"
+        return f"PredictedProduct(smiles='{self.smiles}', RT={self.retention_time}, λmax={self.lambda_max}{ms_info})"
 
 
 class ChemicalReaction:
@@ -163,6 +173,29 @@ class ChemicalReaction:
                     product.set_lambda_max(lm_float)
                 except Exception:
                     continue
+        return self.products
+
+    def predict_products_ms_adducts(self) -> List[PredictedProduct]:
+        """Predict mass spectrometry adducts for current products.
+        
+        Calls the MS adduct prediction function and sets ms_values on each product.
+        Returns the updated list of products.
+        """
+        if not self.products:
+            return self.products
+        
+        # Get SMILES list from all products
+        smiles_list = [p.get_smiles() for p in self.products]
+        
+        # Predict MS adducts for all SMILES
+        ms_predictions = predict_ms_adducts(smiles_list)
+        
+        # Update each product with its MS adduct predictions
+        for product in self.products:
+            smiles = product.get_smiles()
+            if smiles in ms_predictions:
+                product.set_ms_values(ms_predictions[smiles])
+        
         return self.products
 
     def __repr__(self):

@@ -27,29 +27,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def create_input_csv(smiles_solvent_tuples: List[Tuple[str, str]], output_file: str = "input.csv"):
-    """
-    Create a CSV file from a list of (smiles, solvent) tuples.
-    
-    Parameters
-    ----------
-    smiles_solvent_tuples : List[Tuple[str, str]]
-        List of (smiles, solvent) tuples
-    output_file : str
-        Path to the output CSV file
-        
-    Returns
-    -------
-    str
-        Path to the created CSV file
-    """
-    # Create DataFrame
+    """Create CSV file from (SMILES, solvent) pairs for chemprop input."""
     df = pd.DataFrame(smiles_solvent_tuples, columns=['smiles', 'solvent'])
-    
-    # Write to CSV
     df.to_csv(output_file, index=False)
-    logger.info(f"Created input CSV file: {output_file}")
-    logger.info(f"Input data shape: {df.shape}")
-    
+    logger.info(f"Created input CSV: {output_file} ({df.shape[0]} rows)")
     return output_file
 
 def run_chemprop_prediction(input_file: str = "input.csv", output_file: str = "results.csv"):
@@ -68,8 +49,9 @@ def run_chemprop_prediction(input_file: str = "input.csv", output_file: str = "r
     bool
         True if prediction was successful, False otherwise
     """
-    # Define the checkpoint directory
-    checkpoint_dir = "uvvisml"
+    # Get the directory where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    checkpoint_dir = os.path.join(script_dir, "uvvisml")
     
     # Check if checkpoint directory exists
     if not os.path.exists(checkpoint_dir):
@@ -103,18 +85,16 @@ def run_chemprop_prediction(input_file: str = "input.csv", output_file: str = "r
         return False
 
 def run_chemprop_prediction_in_conda_env(input_file: str = "input.csv", output_file: str = "results.csv", conda_env: str = "uvvismlenv") -> bool:
-    """
-    Run chemprop prediction inside a specific conda environment using `conda run`.
-
-    This avoids switching the current Python process environment and is safer than
-    trying to activate/deactivate from within Python.
-    """
-    checkpoint_dir = "uvvisml"
+    """Run chemprop prediction in specified conda environment."""
+    # Find model directory
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    checkpoint_dir = os.path.join(script_dir, "uvvisml")
+    
     if not os.path.exists(checkpoint_dir):
-        logger.error(f"Checkpoint directory not found: {checkpoint_dir}")
-        logger.info("Please download the models first: cd uvvisml/uvvisml && bash get_model_files.sh")
+        logger.error(f"Model directory not found: {checkpoint_dir}")
         return False
 
+    # Build command
     cmd = [
         "conda", "run", "-n", conda_env,
         "chemprop_predict",
@@ -124,54 +104,35 @@ def run_chemprop_prediction_in_conda_env(input_file: str = "input.csv", output_f
         "--number_of_molecules", "2",
     ]
 
-    logger.info(f"Running in conda env '{conda_env}': {' '.join(cmd)}")
+    logger.info(f"Running chemprop in {conda_env}...")
     try:
         subprocess.run(cmd, capture_output=True, text=True, check=True)
-        logger.info("Chemprop prediction (conda) completed successfully")
+        logger.info("Prediction completed")
         return True
     except subprocess.CalledProcessError as e:
-        logger.error(f"Chemprop prediction (conda) failed: {e}")
-        logger.error(f"stdout: {e.stdout}")
-        logger.error(f"stderr: {e.stderr}")
+        logger.error(f"Prediction failed: {e.stderr}")
         return False
     except Exception as e:
-        logger.error(f"Unexpected error during prediction (conda): {e}")
+        logger.error(f"Error: {e}")
         return False
 
 def extract_predictions(results_file: str) -> Dict[Tuple[str, str], float]:
-    """
-    Extract predictions from the results CSV file.
-    
-    Parameters
-    ----------
-    results_file : str
-        Path to the results CSV file
-        
-    Returns
-    -------
-    Dict[Tuple[str, str], float]
-        Dictionary mapping (smiles, solvent) tuples to lambda max values
-    """
+    """Extract lambda max predictions from chemprop results CSV."""
     try:
-        # Read the results CSV
         df = pd.read_csv(results_file)
-        logger.info(f"Read results file: {results_file}")
-        logger.info(f"Results shape: {df.shape}")
-        
-        # Create the dictionary
         predictions = {}
+        
         for _, row in df.iterrows():
             smiles = row['smiles']
             solvent = row['solvent']
             lambda_max = row['peakwavs_max']
-            
             predictions[(smiles, solvent)] = lambda_max
         
         logger.info(f"Extracted {len(predictions)} predictions")
         return predictions
         
     except Exception as e:
-        logger.error(f"Error extracting predictions: {e}")
+        logger.error(f"Error reading results: {e}")
         return {}
 
 def predict_lambda_max(smiles_solvent_tuples: List[Tuple[str, str]]) -> Dict[Tuple[str, str], float]:
@@ -216,31 +177,32 @@ def predict_lambda_max(smiles_solvent_tuples: List[Tuple[str, str]]) -> Dict[Tup
 
 def predict_lambda_max_in_conda_env(smiles_solvent_tuples: List[Tuple[str, str]], conda_env: str = "uvvismlenv") -> Dict[Tuple[str, str], float]:
     """
-    Predict lambda max values while ensuring execution inside a specific conda environment.
-
-    Uses `conda run -n <env>` to invoke chemprop, so your current interpreter/env
-    remains unaffected (no need to deactivate/reactivate around the call).
+    Predict lambda max values for molecules using chemprop models.
+    
+    Takes a list of (SMILES, solvent) pairs and returns predicted lambda max values.
+    Runs in the specified conda environment to avoid dependency conflicts.
     """
-    logger.info(f"Starting lambda max prediction in conda env '{conda_env}' for {len(smiles_solvent_tuples)} compounds")
+    logger.info(f"Predicting lambda max for {len(smiles_solvent_tuples)} molecules")
 
+    # Create input CSV file
     input_file = create_input_csv(smiles_solvent_tuples)
     output_file = "results.csv"
 
+    # Run chemprop prediction
     if not run_chemprop_prediction_in_conda_env(input_file, output_file, conda_env=conda_env):
-        logger.error("Prediction (conda env) failed")
+        logger.error("Chemprop prediction failed")
         return {}
 
+    # Extract results
     predictions = extract_predictions(output_file)
 
-    # Clean up temporary files
-    try:
-        if os.path.exists(input_file):
-            os.remove(input_file)
-        if os.path.exists(output_file):
-            os.remove(output_file)
-        logger.info("Cleaned up temporary files")
-    except Exception as e:
-        logger.warning(f"Could not clean up temporary files: {e}")
+    # Clean up files
+    for file_path in [input_file, output_file]:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception:
+            pass
 
     return predictions
 

@@ -23,7 +23,7 @@ async def scrape_askcos(reactant_smiles_list, solvent_smiles):
 
     async with async_playwright() as p:
         # Launch Chromium headless browser
-        browser = await p.chromium.launch(headless=False)  # set True for headless
+        browser = await p.chromium.launch(headless=True)  # set True for headless
         page = await browser.new_page()
 
         # Navigate to ASKCOS forward prediction page
