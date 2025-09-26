@@ -8,7 +8,7 @@ Current Version: **1.0.0**
 
 PeakProphet employs a comprehensive multi-modal prediction pipeline that generates candidate compounds and predicts their analytical properties:
 
-### Product Generation
+### Product Prediction
 - **ASKCOS Integration**: Generates candidate products given reactants and solvent using the ASKCOS web server
 - **SMILES-based**: All products are represented as SMILES strings with associated probabilities and molecular weights
 
